@@ -12,10 +12,15 @@
 #   tools/git-baseline/sync-baseline.sh            预检 + 同步（merge 策略，见下文）
 #   tools/git-baseline/sync-baseline.sh --check    只预检，不改任何东西
 #
+# 分支约束：
+#   本脚本只在 feature/merge_upstream 上运行。基线合并必须先在这个分支上
+#   编译验证，再合入 master。在 master 上直接同步会绕过验证，在 develop 上
+#   直接同步会把未验证的基线代码混进日常开发分支。两条都不允许。
+#
 # 策略说明：
-#   本脚本只做 git merge --ff-only。本地与基线的分叉关系由此暴露给用户，
-#   不替用户决定 rebase 还是 merge。ff-only 失败即说明本地已有自有提交，
-#   此时脚本停止并打印分叉情况。
+#   分叉时默认 merge。自有提交是叠加在基线之上的功能，不是要上游接纳的
+#   补丁。merge 保留"哪些是我们的"这个信息，且不重写自有提交的 SHA，推
+#   origin 后不需要 force push。--rebase 可改。
 
 set -eu
 
@@ -23,6 +28,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 BASE_REMOTE=upstream
 BASE_REF="$BASE_REMOTE/master"
+MERGE_BRANCH=feature/merge_upstream
 CHECK_ONLY=0
 STRATEGY=merge
 
@@ -48,6 +54,22 @@ git remote get-url "$BASE_REMOTE" >/dev/null 2>&1 ||
 
 current_branch=$(git symbolic-ref --quiet --short HEAD) ||
     die "当前处于分离 HEAD 状态，拒绝自动同步"
+
+# 基线合并只能在 feature/merge_upstream 上做。在 master 上做会绕过编译验证，
+# 在 develop 上做会把未验证的基线代码混进日常开发分支。
+if [ "$current_branch" != "$MERGE_BRANCH" ]; then
+    {
+        echo "error: 当前分支是 '$current_branch'，基线同步只能在 $MERGE_BRANCH 上运行。"
+        echo ""
+        echo "流程："
+        echo "  git switch -c $MERGE_BRANCH --track origin/master"
+        echo "  tools/git-baseline/sync-baseline.sh"
+        echo "  编译验证通过后："
+        echo "  git switch master && git merge --no-ff $MERGE_BRANCH"
+        echo "  git switch feature/develop && git merge $MERGE_BRANCH"
+    } >&2
+    exit 2
+fi
 
 if [ -n "$(git status --porcelain)" ]; then
     die "工作区或索引有未提交改动。请先提交或 stash 后再同步。"
