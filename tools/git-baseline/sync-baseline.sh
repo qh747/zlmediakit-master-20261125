@@ -9,8 +9,8 @@
 #   - 幂等：重复执行不产生额外状态。
 #
 # 用法：
-#   tools/sync-baseline.sh            预检 + 同步（merge 策略，见下文）
-#   tools/sync-baseline.sh --check    只预检，不改任何东西
+#   tools/git-baseline/sync-baseline.sh            预检 + 同步（merge 策略，见下文）
+#   tools/git-baseline/sync-baseline.sh --check    只预检，不改任何东西
 #
 # 策略说明：
 #   本脚本只做 git merge --ff-only。本地与基线的分叉关系由此暴露给用户，
