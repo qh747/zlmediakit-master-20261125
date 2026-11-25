@@ -5,9 +5,12 @@ on:
     # master 已移除：本仓库是 ZLMediaKit 的二次开发 fork，推 master 不应
     # 触发镜像推送。这两个 workflow 会以 zlmediakit/zlmediakit 名义推送到
     # 官方 Docker Hub 仓库，fork 上既无 secret 也不应配置。
-    # 需要发版时在 feature/* 或 release/* 分支上触发，或手工 workflow_dispatch。
+    # feature/develop 与 feature/merge_upstream 也移除：它们命中 feature/*，
+    # 会触发必然失败的 Docker Hub 推送。发版在 release/* 上触发。
     branches:
       - "feature/*"
+      - "!feature/develop"
+      - "!feature/merge_upstream"
       - "release/*"
 
 env:

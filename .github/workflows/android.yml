@@ -1,5 +1,14 @@
 name: Android
-on: [push, pull_request]
+on:
+  push:
+    # feature/develop 是日常开发分支，推它只跑 linux。其余平台在 PR 时跑。
+    # 写出 branches 之后，tag push 不再命中本 workflow。这是有意的：仓库没有
+    # 在 tag 上产出 release 的逻辑，tag 只是 git 标记。见 AGENTS.md 的「tag」段。
+    branches:
+      - "**"
+      - "!feature/develop"
+  pull_request:
+
 jobs:
   build:
     runs-on: ubuntu-24.04
