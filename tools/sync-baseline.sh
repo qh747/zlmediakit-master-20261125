@@ -64,7 +64,11 @@ say "    本地领先 $BASE_REF: $ahead 个提交"
 say "    本地落后 $BASE_REF: $behind 个提交"
 
 if [ "$behind" -eq 0 ]; then
-    say "==> 已是最新，无需同步"
+    if [ "$ahead" -eq 0 ]; then
+        say "==> 已是最新，无需同步"
+    else
+        say "==> 本地已包含基线全部提交，另有 $ahead 个自有提交，无需同步"
+    fi
     exit 0
 fi
 
@@ -75,10 +79,15 @@ if ! merge_out=$(git merge-tree --write-tree "$BASE_REF" HEAD 2>&1); then
     say ""
     say "预检发现冲突，已停止，未改动任何文件。"
     say ""
-    say "$merge_out" | grep -E '^(CONFLICT|Auto-merging)' || true
+    say "$merge_out" | grep -E '^(CONFLICT|Auto-merging)' | sed 's/^/    /' || true
     say ""
-    say "冲突文件:"
-    say "$merge_out" | awk '$3 != "" { print "  - " $3 }' | sort -u || true
+    # merge-tree 的机器可读段: "100644 <oid> <stage>\t<path>"，stage 为 1/2/3 表示冲突
+    conflict_files=$(printf '%s\n' "$merge_out" |
+        awk -F'\t' 'NF >= 2 && $1 ~ /^[0-7]{6} / { print $2 }' | sort -u)
+    if [ -n "$conflict_files" ]; then
+        say "冲突文件:"
+        printf '%s\n' "$conflict_files" | sed 's/^/    - /'
+    fi
     say ""
     say "请人工处理后重跑本脚本。"
     exit 1
@@ -104,7 +113,15 @@ fi
 # --- 5. 快进，并记录子模块与 tag 变化 ------------------------------------
 
 old_ref=$(git rev-parse HEAD)
-old_subs=$(git submodule status --recursive 2>/dev/null | awk '{print $1, $2}' | sort)
+# submodule status 的首列可能带 - (未初始化) 或 + (SHA 不匹配) 前缀，
+# 直接比较会让状态翻转产生假阳性，因此统一剥离后再比较。
+submodule_snapshot() {
+    git submodule status --recursive 2>/dev/null |
+        awk '{ print $1, $2 }' |
+        sed 's/^[+-]//' |
+        sort
+}
+old_subs=$(submodule_snapshot)
 old_tags=$(git tag --points-at HEAD | sort)
 
 say "==> 快进到 $BASE_REF"
@@ -116,7 +133,7 @@ say ""
 say "==> 同步完成"
 say "    $(git rev-parse --short "$old_ref") -> $(git rev-parse --short HEAD)"
 
-new_subs=$(git submodule status --recursive 2>/dev/null | awk '{print $1, $2}' | sort)
+new_subs=$(submodule_snapshot)
 if [ "$old_subs" = "$new_subs" ]; then
     say "    子模块无变化"
 else
