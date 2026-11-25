@@ -141,8 +141,21 @@ git submodule update --init --recursive
 cp .gitmodules_github .gitmodules && git submodule sync --recursive
 ```
 
-判定标准有两条：`cmake --build` 退出码为 0，且 `build/release/linux/Release/MediaServer`
-存在。只看退出码不够，产物缺失也算失败。
+判定标准有两条：`cmake --build` 退出码为 0，且产物 `MediaServer` 存在。
+产物目录随 `CMAKE_BUILD_TYPE` 变化：
+
+| `CMAKE_BUILD_TYPE` | 产物路径 |
+| --- | --- |
+| `Release` | `release/linux/Release/MediaServer` |
+| `Debug` 或不设 | `release/linux/Debug/MediaServer` |
+
+产物不在 `build/` 下，在仓库根的 `release/` 下。只看退出码会漏掉链接产物缺失的
+情况。用脚本判定，别靠肉眼：
+
+```sh
+cmake --build build -j"$(nproc)" || exit 1
+ls release/linux/*/MediaServer >/dev/null
+```
 
 #### CI 触发矩阵
 
