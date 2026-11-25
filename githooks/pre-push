@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# 只允许向 origin 推送。
+#
+# origin 是自有仓库（可写）；upstream 是 ZLMediaKit 官方基线（只读）。
+# 这是第二道防线：第一道是 remote.upstream.pushurl=disabled://blocked，
+# 它让 upstream 在解析阶段就不是合法 remote。本 hook 只负责在 git 建立
+# 任何网络连接之前失败，并给出人能读懂的原因。
+#
+# 注意：git push --no-verify 会跳过本 hook。这是 git 的既定行为，无法从
+# hook 内部阻止。真正不可绕过的防线是 pushurl，本 hook 是失误提示层。
+#
+# $1 = remote 名
+# $2 = remote 的 push URL（已解析）
+
+set -u
+
+remote_name="${1:-}"
+remote_url="${2:-}"
+
+case "$remote_name" in
+    origin)
+        exit 0
+        ;;
+    "")
+        echo "pre-push: 未收到 remote 名，拒绝推送。" >&2
+        exit 1
+        ;;
+    *)
+        {
+            echo "pre-push: 拒绝推送到 '$remote_name'。"
+            echo "          推送目标: $remote_url"
+            echo "          本仓库只允许推送到 origin。"
+            echo "          upstream 是只读基线，只能拉取，不能推送。"
+            echo "          如确需推送，请显式使用: git push origin <ref>"
+        } >&2
+        exit 1
+        ;;
+esac
