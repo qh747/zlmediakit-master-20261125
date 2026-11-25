@@ -24,12 +24,16 @@ cd "$(git rev-parse --show-toplevel)"
 BASE_REMOTE=upstream
 BASE_REF="$BASE_REMOTE/master"
 CHECK_ONLY=0
+STRATEGY=merge
 
 case "${1:-}" in
     --check) CHECK_ONLY=1 ;;
-    "") ;;
+    --rebase) STRATEGY=rebase ;;
+    --merge) STRATEGY=merge ;;
+    "")
+        ;;
     *)
-        echo "用法: $0 [--check]" >&2
+        echo "用法: $0 [--check] [--merge|--rebase]" >&2
         exit 2
         ;;
 esac
@@ -99,20 +103,11 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
     exit 0
 fi
 
-# --- 4. 分叉处理 ---------------------------------------------------------
-
-if [ "$ahead" -ne 0 ]; then
-    say ""
-    say "本地有 $ahead 个自有提交，与基线分叉。"
-    say "本脚本不替你在 rebase 与 merge 之间做选择。可选："
-    say "  git merge $BASE_REF      保留分叉历史，产生 merge 提交"
-    say "  git rebase $BASE_REF     线性历史，但会重写自有提交的 SHA"
-    die "需要人工决定同步策略"
-fi
-
-# --- 5. 快进，并记录子模块与 tag 变化 ------------------------------------
-
+# --- 4. 记录同步前的状态 -------------------------------------------------
+#
+# 快照必须在合并之前取，否则 diff 永远是空的。
 old_ref=$(git rev-parse HEAD)
+
 # submodule status 的首列可能带 - (未初始化) 或 + (SHA 不匹配) 前缀，
 # 直接比较会让状态翻转产生假阳性，因此统一剥离后再比较。
 submodule_snapshot() {
@@ -124,8 +119,28 @@ submodule_snapshot() {
 old_subs=$(submodule_snapshot)
 old_tags=$(git tag --points-at HEAD | sort)
 
-say "==> 快进到 $BASE_REF"
-git merge --ff-only "$BASE_REF"
+# --- 5. 分叉处理 ---------------------------------------------------------
+#
+# 本仓库的策略是 merge（已定），理由：自有提交是叠加在基线之上的功能，
+# 不是要上游接纳的补丁。merge 保留"哪些是我们的"这个真实信息，且不重写
+# 自有提交的 SHA，推 origin 后无需 force push。
+# rebase 会把自有提交全部重放到基线末尾、SHA 全变，需要 force push。
+# 需要改用 rebase 时加 --rebase。
+
+if [ "$ahead" -ne 0 ]; then
+    say ""
+    say "本地有 $ahead 个自有提交，与基线分叉。"
+    if [ "$STRATEGY" = "rebase" ]; then
+        say "==> 按 rebase 策略把自有提交重放到 $BASE_REF"
+        git rebase "$BASE_REF"
+    else
+        say "==> 按 merge 策略合并 $BASE_REF"
+        git merge --no-edit "$BASE_REF"
+    fi
+else
+    say "==> 快进到 $BASE_REF"
+    git merge --ff-only "$BASE_REF"
+fi
 
 # --- 6. 报告变化 ---------------------------------------------------------
 

@@ -58,14 +58,15 @@ tools/git-baseline/setup.sh
 
 ```sh
 tools/git-baseline/sync-baseline.sh --check   # 只预检，不改任何东西
-tools/git-baseline/sync-baseline.sh           # 预检 + 快进
+tools/git-baseline/sync-baseline.sh           # 预检 + merge
 ```
 
 脚本行为：
 
 - 同步前用 `git merge-tree --write-tree` 做冲突预检，**不碰工作区与索引**。
 - 有冲突就停下并列出冲突文件，不替人解决。
-- 本地有自有提交、与基线分叉时停下，**不替人在 rebase 与 merge 之间做选择**。
+- 分叉时默认 `merge`（`--rebase` 可改）。理由：自有提交是叠加在基线之上的功能，不是要上游接纳的补丁。merge 保留"哪些是我们的"这个信息，且不重写自有提交的 SHA，推 origin 后不需要 force push。
+- 无分叉时用 `--ff-only` 快进。
 - 同步后报告子模块 SHA 与 tag 变化。
 
 `.gitmodules` 指向 gitee，`.gitmodules_github` 是 github 镜像。gitee 不可达时用后者替换，再 `git submodule sync --recursive`。
@@ -73,5 +74,5 @@ tools/git-baseline/sync-baseline.sh           # 预检 + 快进
 ### 推送前
 
 - 确认 `git remote -v` 里 `origin` 是你自己的仓库。
-- 推 `origin` 会触发 `ZLMediaKit` 移植来的全套 CI。`docker.yml` 与 `docker_py.yml` 依赖 `secrets.DOCKER_IO_SECRET`，fork 上必然失败，且不应配置该 secret（镜像会推到官方 `zlmediakit/zlmediakit`）。
+- 推 `origin` 会触发 `ZLMediaKit` 移植来的全套 CI。`docker.yml` 与 `docker_py.yml` 会把镜像推到官方 `zlmediakit/zlmediakit`，依赖 `secrets.DOCKER_IO_SECRET`——fork 上既没有这个 secret，也不应该配。已把这两个 workflow 的 `push.branches` 里的 `master` 移除，所以推 master 不再触发它们；不要加回去。
 
