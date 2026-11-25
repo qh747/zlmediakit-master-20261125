@@ -103,13 +103,24 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
     case "$remote_ref" in
     refs/heads/master)
-        {
-            echo "pre-push: 拒绝更新 refs/heads/master。"
-            echo "          master 是发布分支，只能合入验证过的分支。"
-            echo "          日常开发推到 feature/develop，基线合并走 feature/merge_upstream。"
-            echo "          发版覆盖命令见 AGENTS.md 的「分支」段。"
-        } >&2
-        failed=1
+        # 发版必须能推 master，但只能显式声明。设置这个环境变量即留痕：
+        #   MLK_RELEASE_PUSH=1 git push origin master
+        # 未声明时拒绝。这样误推被拦，有意发版不被拦。
+        if [ "${MLK_RELEASE_PUSH:-0}" = "1" ]; then
+            {
+                echo "pre-push: MLK_RELEASE_PUSH=1 已设置，放行 master 推送。"
+                echo "          确认这是发版操作，且已验证过。"
+            } >&2
+        else
+            {
+                echo "pre-push: 拒绝更新 refs/heads/master。"
+                echo "          master 是发布分支，只能合入验证过的分支。"
+                echo "          日常开发推到 feature/develop，基线合并走 feature/merge_upstream。"
+                echo "          发版时显式声明:"
+                echo "            MLK_RELEASE_PUSH=1 git push origin master"
+            } >&2
+            failed=1
+        fi
         ;;
     refs/tags/*)
         if ! printf '%s' "$remote_ref" | grep -qE "$TAG_RE"; then

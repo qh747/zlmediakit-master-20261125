@@ -111,11 +111,14 @@ git merge feature/merge_upstream
 
 第三层是唯一能兜住 `--no-verify` 的机制。仓库是公开仓库，分支保护免费可用。
 
-发版需要覆盖 master 保护时，用一次性配置覆盖，不改 `.git/config`：
+发版必须能推 `master`，但只能显式声明。设 `MLK_RELEASE_PUSH=1` 即留痕：
 
 ```sh
-git -c branch.master.pushRemote=origin push origin master
+MLK_RELEASE_PUSH=1 git push origin master
 ```
+
+未声明时钩子拒绝，并打印这条命令。声明后钩子放行并提示确认。`git -c
+branch.master.pushRemote=origin` 不够，它只绕过第一层，第二层照样拒绝。
 
 #### 验证判据
 
